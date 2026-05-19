@@ -114,6 +114,16 @@ jobs:
           security unlock-keychain -p "$(cat ~/.keychain-password)" ~/Library/Keychains/login.keychain-db
           security set-keychain-settings ~/Library/Keychains/login.keychain-db
 
+      - name: List macOS build output
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        working-directory: build/StandaloneOSX
+        run: |
+          echo "--- build/StandaloneOSX/ ---"
+          ls -la
+          echo ""
+          echo "--- find .app ---"
+          find . -maxdepth 3 -name "*.app" -print
+
       - name: Sign and notarize (macOS only)
         if: matrix.targetPlatform == 'StandaloneOSX'
         working-directory: build/StandaloneOSX
