@@ -123,12 +123,52 @@ jobs:
              "${APP_BASE}.entitlements"
           bash "${{ github.workspace }}/.workflows/scripts/sign_and_notarize.sh" "${APP_BASE}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.names.outputs.app_base }}
-          path: |
-            build/${{ matrix.targetPlatform }}/${{ steps.names.outputs.app_base }}.zip
-            build/${{ matrix.targetPlatform }}/${{ steps.names.outputs.app_base }}.exe
-          if-no-files-found: ignore
-          retention-days: 14
+      - name: Zip Windows build
+        if: matrix.targetPlatform == 'StandaloneWindows64'
+        working-directory: build/StandaloneWindows64
+        run: |
+          APP_BASE="${{ steps.names.outputs.app_base }}"
+          ditto -c -k --sequesterRsrc . "${APP_BASE}.zip"
+          du -h "${APP_BASE}.zip"
+
+      - name: Upload to builds server
+        env:
+          PROJECT_NAME: ${{ inputs.project-name }}
+          VERSION: ${{ inputs.version }}
+          PLATFORM: ${{ matrix.targetPlatform }}
+          APP_BASE: ${{ steps.names.outputs.app_base }}
+        run: |
+          set -a
+          source ~/.config/ci/unity.env
+          set +a
+
+          case "$PLATFORM" in
+            StandaloneOSX)       LOCAL_FILE="build/StandaloneOSX/${APP_BASE}.zip" ;;
+            StandaloneWindows64) LOCAL_FILE="build/StandaloneWindows64/${APP_BASE}.zip" ;;
+            *)                   echo "::error::Unknown platform $PLATFORM"; exit 1 ;;
+          esac
+
+          if [[ ! -f "$LOCAL_FILE" ]]; then
+            echo "::error::Build output not found at $LOCAL_FILE"
+            ls -la "$(dirname "$LOCAL_FILE")" || true
+            exit 1
+          fi
+
+          DIR_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+          REMOTE_DIR="${BUILDS_PATH}/${DIR_NAME}/${VERSION}"
+
+          echo "Uploading $LOCAL_FILE → ${BUILDS_USER}@${BUILDS_HOST}:${REMOTE_DIR}/"
+          du -h "$LOCAL_FILE"
+
+          ssh -i "$BUILDS_SSH_KEY" \
+              -o StrictHostKeyChecking=accept-new \
+              "${BUILDS_USER}@${BUILDS_HOST}" \
+              "mkdir -p '${REMOTE_DIR}'"
+
+          rsync -av --progress \
+            -e "ssh -i $BUILDS_SSH_KEY -o StrictHostKeyChecking=accept-new" \
+            "$LOCAL_FILE" \
+            "${BUILDS_USER}@${BUILDS_HOST}:${REMOTE_DIR}/"
+
+          echo ""
+          echo "✓ Uploaded to ${REMOTE_DIR}/$(basename "$LOCAL_FILE")"
