@@ -23,13 +23,37 @@ on:
         default: ''
 
 jobs:
+  prepare:
+    name: Prepare matrix
+    runs-on: [self-hosted, macos, unity]
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          PLATFORMS="${{ inputs.platforms }}"
+          JSON=$(echo "$PLATFORMS" | awk -F',' '{
+            printf "["
+            for (i = 1; i <= NF; i++) {
+              gsub(/^[ \t]+|[ \t]+$/, "", $i)
+              if (length($i) > 0) {
+                if (i > 1) printf ","
+                printf "\"%s\"", $i
+              }
+            }
+            printf "]"
+          }')
+          echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Computed matrix: $JSON"
+
   build:
     name: Build ${{ matrix.targetPlatform }}
+    needs: prepare
     runs-on: [self-hosted, macos, unity]
     strategy:
       fail-fast: false
       matrix:
-        targetPlatform: ${{ fromJSON(format('[{0}]', inputs.platforms)) }}
+        targetPlatform: ${{ fromJSON(needs.prepare.outputs.matrix) }}
 
     steps:
       - name: Checkout project
