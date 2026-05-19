@@ -8,14 +8,17 @@ on:
         type: string
         required: false
         default: 'StandaloneWindows64,StandaloneOSX'
+
       project-name:
         description: 'Short project name (used in output filename)'
         type: string
         required: true
+
       version:
         description: 'Version string (e.g. 0.1.5)'
         type: string
         required: true
+
       unity-version:
         description: 'Unity version (e.g. 6000.3.11f1). Leave blank to auto-detect.'
         type: string
@@ -26,12 +29,15 @@ jobs:
   prepare:
     name: Prepare matrix
     runs-on: [self-hosted, macos, unity]
+
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
+
     steps:
       - id: set
         run: |
           PLATFORMS="${{ inputs.platforms }}"
+
           JSON=$(echo "$PLATFORMS" | awk -F',' '{
             printf "["
             for (i = 1; i <= NF; i++) {
@@ -43,6 +49,7 @@ jobs:
             }
             printf "]"
           }')
+
           echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
           echo "Computed matrix: $JSON"
 
@@ -50,6 +57,7 @@ jobs:
     name: Build ${{ matrix.targetPlatform }}
     needs: prepare
     runs-on: [self-hosted, macos, unity]
+
     strategy:
       fail-fast: false
       matrix:
@@ -79,8 +87,11 @@ jobs:
             iOS)                 SUFFIX="iOS" ;;
             *)                   SUFFIX="${{ matrix.targetPlatform }}" ;;
           esac
+
           APP_BASE="${{ inputs.project-name }}-THP-V.${{ inputs.version }}-${SUFFIX}"
+
           echo "app_base=${APP_BASE}" >> "$GITHUB_OUTPUT"
+          echo "Computed app base: ${APP_BASE}"
 
       - name: Cache Library
         uses: actions/cache@v4
@@ -96,6 +107,7 @@ jobs:
           set -a
           source ~/.config/ci/unity.env
           set +a
+
           echo "::add-mask::$UNITY_SERIAL"
           echo "UNITY_SERIAL=$UNITY_SERIAL" >> "$GITHUB_ENV"
 
@@ -108,29 +120,61 @@ jobs:
           versioning: None
           skipActivation: true
 
-      - name: Unlock keychain
-        if: matrix.targetPlatform == 'StandaloneOSX'
-        run: |
-          security unlock-keychain -p "$(cat ~/.keychain-password)" ~/Library/Keychains/login.keychain-db
-          security set-keychain-settings ~/Library/Keychains/login.keychain-db
-
       - name: List macOS build output
         if: matrix.targetPlatform == 'StandaloneOSX'
         working-directory: build/StandaloneOSX
         run: |
           echo "--- build/StandaloneOSX/ ---"
           ls -la
-          echo ""
-          echo "--- find .app ---"
-          find . -maxdepth 3 -name "*.app" -print
 
-      - name: Sign and notarize (macOS only)
+          echo ""
+          echo "--- Found .app bundles ---"
+          find . -maxdepth 2 -name "*.app" -type d -print
+
+      - name: Normalize macOS app name
         if: matrix.targetPlatform == 'StandaloneOSX'
         working-directory: build/StandaloneOSX
         run: |
           APP_BASE="${{ steps.names.outputs.app_base }}"
+          EXPECTED="${APP_BASE}.app"
+
+          ACTUAL="$(find . -maxdepth 1 -name "*.app" -type d | head -n 1 | sed 's#^\./##')"
+
+          echo "Expected app: $EXPECTED"
+          echo "Actual app:   $ACTUAL"
+
+          if [[ -z "$ACTUAL" ]]; then
+            echo "::error::No .app bundle found in build/StandaloneOSX"
+            ls -la
+            exit 1
+          fi
+
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "Renaming app bundle:"
+            echo "$ACTUAL -> $EXPECTED"
+            mv "$ACTUAL" "$EXPECTED"
+          fi
+
+          echo ""
+          echo "--- Final macOS build output ---"
+          ls -la
+          find . -maxdepth 2 -name "*.app" -type d -print
+
+      - name: Unlock keychain
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        run: |
+          security unlock-keychain -p "$(cat ~/.keychain-password)" ~/Library/Keychains/login.keychain-db
+          security set-keychain-settings ~/Library/Keychains/login.keychain-db
+
+      - name: Sign and notarize macOS build
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        working-directory: build/StandaloneOSX
+        run: |
+          APP_BASE="${{ steps.names.outputs.app_base }}"
+
           cp "${{ github.workspace }}/.workflows/entitlements/default.entitlements" \
              "${APP_BASE}.entitlements"
+
           bash "${{ github.workspace }}/.workflows/scripts/sign_and_notarize.sh" "${APP_BASE}"
 
       - name: Zip Windows build
@@ -138,6 +182,7 @@ jobs:
         working-directory: build/StandaloneWindows64
         run: |
           APP_BASE="${{ steps.names.outputs.app_base }}"
+
           ditto -c -k --sequesterRsrc . "${APP_BASE}.zip"
           du -h "${APP_BASE}.zip"
 
@@ -153,9 +198,16 @@ jobs:
           set +a
 
           case "$PLATFORM" in
-            StandaloneOSX)       LOCAL_FILE="build/StandaloneOSX/${APP_BASE}.zip" ;;
-            StandaloneWindows64) LOCAL_FILE="build/StandaloneWindows64/${APP_BASE}.zip" ;;
-            *)                   echo "::error::Unknown platform $PLATFORM"; exit 1 ;;
+            StandaloneOSX)
+              LOCAL_FILE="build/StandaloneOSX/${APP_BASE}.zip"
+              ;;
+            StandaloneWindows64)
+              LOCAL_FILE="build/StandaloneWindows64/${APP_BASE}.zip"
+              ;;
+            *)
+              echo "::error::Unknown platform $PLATFORM"
+              exit 1
+              ;;
           esac
 
           if [[ ! -f "$LOCAL_FILE" ]]; then
@@ -167,13 +219,13 @@ jobs:
           DIR_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
           REMOTE_DIR="${BUILDS_PATH}/${DIR_NAME}/${VERSION}"
 
-          echo "Uploading $LOCAL_FILE → ${BUILDS_USER}@${BUILDS_HOST}:${REMOTE_DIR}/"
+          echo "Uploading $LOCAL_FILE to ${BUILDS_USER}@${BUILDS_HOST}:${REMOTE_DIR}/"
           du -h "$LOCAL_FILE"
 
           ssh -i "$BUILDS_SSH_KEY" \
-              -o StrictHostKeyChecking=accept-new \
-              "${BUILDS_USER}@${BUILDS_HOST}" \
-              "mkdir -p '${REMOTE_DIR}'"
+            -o StrictHostKeyChecking=accept-new \
+            "${BUILDS_USER}@${BUILDS_HOST}" \
+            "mkdir -p '${REMOTE_DIR}'"
 
           rsync -av --progress \
             -e "ssh -i $BUILDS_SSH_KEY -o StrictHostKeyChecking=accept-new" \
@@ -181,4 +233,4 @@ jobs:
             "${BUILDS_USER}@${BUILDS_HOST}:${REMOTE_DIR}/"
 
           echo ""
-          echo "✓ Uploaded to ${REMOTE_DIR}/$(basename "$LOCAL_FILE")"
+          echo "Uploaded to ${REMOTE_DIR}/$(basename "$LOCAL_FILE")"
