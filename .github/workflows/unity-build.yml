@@ -1,0 +1,74 @@
+name: Unity Build
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: 'Comma-separated build targets'
+        type: string
+        required: false
+        default: 'StandaloneWindows64,StandaloneOSX'
+      build-name:
+        description: 'Name of the output binary'
+        type: string
+        required: true
+      unity-version:
+        description: 'Unity Version (e.g. 6000.3.11f1). Leave blank to auto detect.
+        type: string
+        required: false
+        default: ''
+      secrets:
+        UNITY_LICENSE:
+          required: true
+        UNITY_EMAIL:
+          required: true
+        UNITY_PASSWORD:
+          required: true
+        MACOS_SIGNING_IDENTITY:
+          required: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.targetPlatform }}
+    runs-on: [self-hosted, macos, unity]
+    strategy:
+      fail-fast: false
+      matrix:
+        targetPlatform: ${{ fromJSON(format('[{0}]', inputs.platforms)) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ inputs.build-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ inputs.build-name }}-${{ matrix.targetPlatform }}-
+            Library-${{ inputs.build-name }}-
+
+      - name: Build Unity project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildName: ${{ inputs.build-name }}
+          unityVersion: ${{ inputs.unity-version || 'auto' }}
+
+      - name: Sign macOS build
+        if: matrix.targetPlatform == 'StandaloneOSX' && secrets.MACOS_SIGNING_IDENTITY != ''
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.build-name }}-${{ matrix.targetPlatform }}-${{ github.run_number }}
+          path: build/${{ matrix.targetPlatform }}
+          retention-days: 14
+          
+        
