@@ -21,13 +21,6 @@ on:
         type: string
         required: false
         default: ''
-    secrets:
-      UNITY_LICENSE:
-        required: true
-      UNITY_EMAIL:
-        required: true
-      UNITY_PASSWORD:
-        required: true
 
 jobs:
   build:
@@ -70,16 +63,30 @@ jobs:
             Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-
             Library-${{ inputs.project-name }}-
 
+      - name: Load Unity credentials
+        run: |
+          set -a
+          source ~/.config/ci/unity.env
+          set +a
+          echo "::add-mask::$UNITY_PASSWORD"
+          echo "UNITY_EMAIL=$UNITY_EMAIL" >> "$GITHUB_ENV"
+          echo "UNITY_PASSWORD=$UNITY_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build Unity project
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_EMAIL: ${{ env.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ env.UNITY_PASSWORD }}
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
           buildName: ${{ steps.names.outputs.app_base }}
           unityVersion: ${{ inputs.unity-version || 'auto' }}
+
+      - name: Unlock keychain
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        run: |
+          security unlock-keychain -p "$(cat ~/.keychain-password)" ~/Library/Keychains/login.keychain-db
+          security set-keychain-settings ~/Library/Keychains/login.keychain-db
 
       - name: Sign and notarize (macOS only)
         if: matrix.targetPlatform == 'StandaloneOSX'
