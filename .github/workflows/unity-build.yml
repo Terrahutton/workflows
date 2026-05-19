@@ -101,13 +101,12 @@ jobs:
 
       - name: Build Unity project
         uses: game-ci/unity-builder@v4
-        env:
-          UNITY_SERIAL: ${{ env.UNITY_SERIAL }}
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
           buildName: ${{ steps.names.outputs.app_base }}
           unityVersion: ${{ inputs.unity-version || 'auto' }}
           versioning: None
+          skipActivation: true
 
       - name: Unlock keychain
         if: matrix.targetPlatform == 'StandaloneOSX'
