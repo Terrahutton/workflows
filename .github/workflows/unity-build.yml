@@ -63,8 +63,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: terrahutton/workflows
-          path: ../workflows-shared
+          path: .workflows
           ref: main
+
+      - name: Hide .workflows from git
+        run: |
+          echo ".workflows/" >> .git/info/exclude
 
       - name: Compute build name
         id: names
@@ -117,9 +121,9 @@ jobs:
         working-directory: build/StandaloneOSX
         run: |
           APP_BASE="${{ steps.names.outputs.app_base }}"
-          cp "${{ github.workspace }}/../workflows-shared/entitlements/default.entitlements" \
+          cp "${{ github.workspace }}/.workflows/entitlements/default.entitlements" \
              "${APP_BASE}.entitlements"
-          bash "${{ github.workspace }}/../workflows-shared/scripts/sign_and_notarize.sh" "${APP_BASE}"
+          bash "${{ github.workspace }}/.workflows/scripts/sign_and_notarize.sh" "${APP_BASE}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
