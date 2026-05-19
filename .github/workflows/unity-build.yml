@@ -63,7 +63,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: terrahutton/workflows
-          path: .workflows
+          path: ../workflows-shared
           ref: main
 
       - name: Compute build name
@@ -117,9 +117,9 @@ jobs:
         working-directory: build/StandaloneOSX
         run: |
           APP_BASE="${{ steps.names.outputs.app_base }}"
-          cp "${{ github.workspace }}/.workflows/entitlements/default.entitlements" \
+          cp "${{ github.workspace }}/../workflows-shared/entitlements/default.entitlements" \
              "${APP_BASE}.entitlements"
-          bash "${{ github.workspace }}/.workflows/scripts/sign_and_notarize.sh" "${APP_BASE}"
+          bash "${{ github.workspace }}/../workflows-shared/scripts/sign_and_notarize.sh" "${APP_BASE}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
