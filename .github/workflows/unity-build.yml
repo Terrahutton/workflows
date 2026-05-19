@@ -8,24 +8,26 @@ on:
         type: string
         required: false
         default: 'StandaloneWindows64,StandaloneOSX'
-      build-name:
-        description: 'Name of the output binary'
+      project-name:
+        description: 'Short project name (used in output filename)'
+        type: string
+        required: true
+      version:
+        description: 'Version string (e.g. 0.1.5)'
         type: string
         required: true
       unity-version:
-        description: 'Unity Version (e.g. 6000.3.11f1). Leave blank to auto detect.
+        description: 'Unity version (e.g. 6000.3.11f1). Leave blank to auto-detect.'
         type: string
         required: false
         default: ''
-      secrets:
-        UNITY_LICENSE:
-          required: true
-        UNITY_EMAIL:
-          required: true
-        UNITY_PASSWORD:
-          required: true
-        MACOS_SIGNING_IDENTITY:
-          required: false
+    secrets:
+      UNITY_LICENSE:
+        required: true
+      UNITY_EMAIL:
+        required: true
+      UNITY_PASSWORD:
+        required: true
 
 jobs:
   build:
@@ -35,17 +37,38 @@ jobs:
       fail-fast: false
       matrix:
         targetPlatform: ${{ fromJSON(format('[{0}]', inputs.platforms)) }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout workflows
+        uses: actions/checkout@v4
+        with:
+          repository: terrahutton/workflows
+          path: .workflows
+          ref: main
+
+      - name: Compute build name
+        id: names
+        run: |
+          case "${{ matrix.targetPlatform }}" in
+            StandaloneWindows64) SUFFIX="Win" ;;
+            StandaloneOSX)       SUFFIX="Mac" ;;
+            iOS)                 SUFFIX="iOS" ;;
+            *)                   SUFFIX="${{ matrix.targetPlatform }}" ;;
+          esac
+          APP_BASE="${{ inputs.project-name }}-THP-V.${{ inputs.version }}-${SUFFIX}"
+          echo "app_base=${APP_BASE}" >> "$GITHUB_OUTPUT"
 
       - name: Cache Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ inputs.build-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-${{ inputs.build-name }}-${{ matrix.targetPlatform }}-
-            Library-${{ inputs.build-name }}-
+            Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-
+            Library-${{ inputs.project-name }}-
 
       - name: Build Unity project
         uses: game-ci/unity-builder@v4
@@ -55,20 +78,24 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
-          buildName: ${{ inputs.build-name }}
+          buildName: ${{ steps.names.outputs.app_base }}
           unityVersion: ${{ inputs.unity-version || 'auto' }}
 
-      - name: Sign macOS build
-        if: matrix.targetPlatform == 'StandaloneOSX' && secrets.MACOS_SIGNING_IDENTITY != ''
-        env:
-          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      - name: Sign and notarize (macOS only)
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        working-directory: build/StandaloneOSX
         run: |
+          APP_BASE="${{ steps.names.outputs.app_base }}"
+          cp "${{ github.workspace }}/.workflows/entitlements/default.entitlements" \
+             "${APP_BASE}.entitlements"
+          bash "${{ github.workspace }}/.workflows/scripts/sign_and_notarize.sh" "${APP_BASE}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.build-name }}-${{ matrix.targetPlatform }}-${{ github.run_number }}
-          path: build/${{ matrix.targetPlatform }}
+          name: ${{ steps.names.outputs.app_base }}
+          path: |
+            build/${{ matrix.targetPlatform }}/${{ steps.names.outputs.app_base }}.zip
+            build/${{ matrix.targetPlatform }}/${{ steps.names.outputs.app_base }}.exe
+          if-no-files-found: ignore
           retention-days: 14
-          
-        
