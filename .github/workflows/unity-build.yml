@@ -131,6 +131,7 @@ jobs:
           echo "--- Found .app bundles ---"
           find . -maxdepth 2 -name "*.app" -type d -print
 
+          
       - name: Normalize macOS app name
         if: matrix.targetPlatform == 'StandaloneOSX'
         working-directory: build/StandaloneOSX
@@ -154,11 +155,6 @@ jobs:
             echo "$ACTUAL -> $EXPECTED"
             mv "$ACTUAL" "$EXPECTED"
           fi
-
-          echo ""
-          echo "--- Final macOS build output ---"
-          ls -la
-          find . -maxdepth 2 -name "*.app" -type d -print
 
       - name: Unlock keychain
         if: matrix.targetPlatform == 'StandaloneOSX'
