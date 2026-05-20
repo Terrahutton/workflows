@@ -93,15 +93,6 @@ jobs:
           echo "app_base=${APP_BASE}" >> "$GITHUB_OUTPUT"
           echo "Computed app base: ${APP_BASE}"
 
-      # - name: Cache Library
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: Library
-      #     key: Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-      #     restore-keys: |
-      #       Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-
-      #       Library-${{ inputs.project-name }}-
-
       - name: Clear Unity generated folders
         run: |
           rm -rf Library
@@ -125,8 +116,6 @@ jobs:
           unityVersion: ${{ inputs.unity-version || 'auto' }}
           versioning: None
           skipActivation: true
-          customParameters: -logFile /Users/builder/UnityBuild-${{ matrix.targetPlatform }}.log
-
           
       - name: Normalize macOS app name
         if: matrix.targetPlatform == 'StandaloneOSX'
