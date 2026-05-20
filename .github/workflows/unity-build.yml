@@ -159,12 +159,46 @@ jobs:
           echo "--- Final macOS build output ---"
           ls -la
           find . -maxdepth 2 -name "*.app" -type d -print
+          
+      - name: Debug codesign identity
+        if: matrix.targetPlatform == 'StandaloneOSX'
+        run: |
+          KEYCHAIN=~/Library/Keychains/login.keychain-db
+
+          echo "==> Default keychain"
+          security default-keychain
+
+          echo "==> Keychain list"
+          security list-keychains
+
+          echo "==> Signing identities"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+          echo "==> Test signing a dummy file"
+          echo "hello" > /tmp/codesign-test
+          codesign --force --timestamp \
+            --sign "Developer ID Application: Terrahutton AB (793U5AWV3W)" \
+            /tmp/codesign-test
+          codesign --verify --verbose=4 /tmp/codesign-test
 
       - name: Unlock keychain
         if: matrix.targetPlatform == 'StandaloneOSX'
         run: |
-          security unlock-keychain -p "$(cat ~/.keychain-password)" ~/Library/Keychains/login.keychain-db
-          security set-keychain-settings ~/Library/Keychains/login.keychain-db
+          KEYCHAIN=~/Library/Keychains/login.keychain-db
+          KEYCHAIN_PASSWORD="$(cat ~/.keychain-password)"
+
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN"
+
+          echo "==> Available signing identities"
+          security find-identity -v -p codesigning "$KEYCHAIN"
 
       - name: Sign and notarize macOS build
         if: matrix.targetPlatform == 'StandaloneOSX'
