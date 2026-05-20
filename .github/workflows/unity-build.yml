@@ -93,14 +93,20 @@ jobs:
           echo "app_base=${APP_BASE}" >> "$GITHUB_OUTPUT"
           echo "Computed app base: ${APP_BASE}"
 
-      - name: Cache Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-
-            Library-${{ inputs.project-name }}-
+      # - name: Cache Library
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: Library
+      #     key: Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+      #     restore-keys: |
+      #       Library-${{ inputs.project-name }}-${{ matrix.targetPlatform }}-
+      #       Library-${{ inputs.project-name }}-
+
+      - name: Clear Unity generated folders
+        run: |
+          rm -rf Library
+          rm -rf Temp
+          rm -rf obj
 
       - name: Load Unity credentials
         run: |
@@ -119,6 +125,23 @@ jobs:
           unityVersion: ${{ inputs.unity-version || 'auto' }}
           versioning: None
           skipActivation: true
+          customParameters: -logFile /Users/builder/UnityBuild-${{ matrix.targetPlatform }}.log
+          
+      - name: Print Unity texture-related log lines
+        if: always()
+        run: |
+          LOG="/Users/builder/UnityBuild-${{ matrix.targetPlatform }}.log"
+      
+          echo "Unity log path: $LOG"
+          ls -lh "$LOG" || true
+      
+          echo ""
+          echo "---- Texture / 16k / max size warnings ----"
+          grep -i "out of range\|16384\|8192\|max supported\|texture\|decal" "$LOG" || true
+      
+          echo ""
+          echo "---- Last 200 lines ----"
+          tail -n 200 "$LOG" || true
 
       - name: List macOS build output
         if: matrix.targetPlatform == 'StandaloneOSX'
