@@ -159,27 +159,6 @@ jobs:
           echo "--- Final macOS build output ---"
           ls -la
           find . -maxdepth 2 -name "*.app" -type d -print
-          
-      - name: Debug codesign identity
-        if: matrix.targetPlatform == 'StandaloneOSX'
-        run: |
-          KEYCHAIN=~/Library/Keychains/login.keychain-db
-
-          echo "==> Default keychain"
-          security default-keychain
-
-          echo "==> Keychain list"
-          security list-keychains
-
-          echo "==> Signing identities"
-          security find-identity -v -p codesigning "$KEYCHAIN"
-
-          echo "==> Test signing a dummy file"
-          echo "hello" > /tmp/codesign-test
-          codesign --force --timestamp \
-            --sign "Developer ID Application: Terrahutton AB (793U5AWV3W)" \
-            /tmp/codesign-test
-          codesign --verify --verbose=4 /tmp/codesign-test
 
       - name: Unlock keychain
         if: matrix.targetPlatform == 'StandaloneOSX'
