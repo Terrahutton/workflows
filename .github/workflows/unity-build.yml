@@ -126,33 +126,6 @@ jobs:
           versioning: None
           skipActivation: true
           customParameters: -logFile /Users/builder/UnityBuild-${{ matrix.targetPlatform }}.log
-          
-      - name: Print Unity texture-related log lines
-        if: always()
-        run: |
-          LOG="/Users/builder/UnityBuild-${{ matrix.targetPlatform }}.log"
-      
-          echo "Unity log path: $LOG"
-          ls -lh "$LOG" || true
-      
-          echo ""
-          echo "---- Texture / 16k / max size warnings ----"
-          grep -i "out of range\|16384\|8192\|max supported\|texture\|decal" "$LOG" || true
-      
-          echo ""
-          echo "---- Last 200 lines ----"
-          tail -n 200 "$LOG" || true
-
-      - name: List macOS build output
-        if: matrix.targetPlatform == 'StandaloneOSX'
-        working-directory: build/StandaloneOSX
-        run: |
-          echo "--- build/StandaloneOSX/ ---"
-          ls -la
-
-          echo ""
-          echo "--- Found .app bundles ---"
-          find . -maxdepth 2 -name "*.app" -type d -print
 
           
       - name: Normalize macOS app name
