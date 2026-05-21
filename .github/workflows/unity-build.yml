@@ -107,6 +107,22 @@ jobs:
 
           echo "::add-mask::$UNITY_SERIAL"
           echo "UNITY_SERIAL=$UNITY_SERIAL" >> "$GITHUB_ENV"
+          
+      - name: Debug GitHub auth for Unity packages
+        run: |
+          set -e
+
+          echo "==> User"
+          whoami
+
+          echo "==> GitHub CLI auth"
+          gh auth status || true
+
+          echo "==> Git config"
+          git config --global --list || true
+
+          echo "==> Test private package repo access"
+          git ls-remote https://github.com/terrahutton/YOUR-PACKAGE-REPO.git
 
       - name: Build Unity project
         uses: game-ci/unity-builder@v4
