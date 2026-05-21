@@ -122,7 +122,7 @@ jobs:
           git config --global --list || true
 
           echo "==> Test private package repo access"
-          git ls-remote https://github.com/terrahutton/YOUR-PACKAGE-REPO.git
+          git ls-remote https://github.com/terrahutton/terrahutton-platform-package.git
 
       - name: Build Unity project
         uses: game-ci/unity-builder@v4
